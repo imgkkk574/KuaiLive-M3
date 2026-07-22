@@ -27,6 +27,8 @@ test("server-renders the KuaiLive-M3 homepage", async () => {
   assert.match(html, /Live-stream highlight prediction/);
   assert.match(html, /Questionnaire-based recommendation/);
   assert.match(html, /Recall and NDCG @ 10, 20, 40/);
+  assert.match(html, /huggingface\.co\/datasets\/imgkkk2004\/KuaiLive-M3/);
+  assert.doesNotMatch(html, /huggingface\.co\/imgkkk2004\/KuaiLive-M3/);
   assert.doesNotMatch(html, /codex-preview|react-loading-skeleton|Your site is taking shape/);
 });
 
@@ -38,6 +40,7 @@ test("server-renders the field description page", async () => {
   assert.match(html, /live_interaction\.csv/);
   assert.match(html, /live_emb_128_ts/);
   assert.match(html, /photo_play\.parquet/);
+  assert.match(html, /huggingface\.co\/datasets\/imgkkk2004\/KuaiLive-M3/);
 });
 
 test("ships project metadata and social preview", async () => {

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { dataTables } from "../dataset-fields";
 import { SiteFooter, SiteHeader } from "../site-chrome";
+import { DATASET_URL } from "../site-config";
 import { FieldCatalog } from "./field-catalog";
 
 export const metadata: Metadata = {
@@ -32,7 +33,7 @@ export default function DescriptionPage() {
       <section className="docs-intro">
         <div className="container docs-intro-grid">
           <div className="docs-note"><span>Privacy</span><p>All user, content, creator, room, and segment identifiers are anonymized. Entity IDs are remapped to consecutive integers starting from 1 unless otherwise noted.</p></div>
-          <div className="docs-links"><Link href="/">← Back to overview</Link><a href="https://huggingface.co/imgkkk2004/KuaiLive-M3/tree/main" target="_blank" rel="noreferrer">Open dataset ↗</a></div>
+          <div className="docs-links"><Link href="/">← Back to overview</Link><a href={DATASET_URL} target="_blank" rel="noreferrer">Open dataset ↗</a></div>
         </div>
       </section>
 

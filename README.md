@@ -7,7 +7,7 @@ protocols. Raw KLM3 data and generated artifacts are not included.
 
 This repository also contains the official KuaiLive-M3 project website under
 [`website/`](website/). The dataset is available on
-[Hugging Face](https://huggingface.co/imgkkk2004/KuaiLive-M3/tree/main).
+[Hugging Face](https://huggingface.co/datasets/imgkkk2004/KuaiLive-M3).
 
 ## 1. Benchmark Tasks
 

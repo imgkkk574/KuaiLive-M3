@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { SiteFooter, SiteHeader } from "./site-chrome";
-import { BENCHMARK_GITHUB_URL } from "./site-config";
+import { BENCHMARK_GITHUB_URL, DATASET_URL } from "./site-config";
 
 const stats = [
   { value: "21,938", label: "Users" },
@@ -76,7 +76,7 @@ export default function Home() {
               and questionnaire-based feedback in one large-scale, real-world benchmark.
             </p>
             <div className="hero-actions">
-              <a className="button button-primary" href="https://huggingface.co/imgkkk2004/KuaiLive-M3/tree/main" target="_blank" rel="noreferrer">
+              <a className="button button-primary" href={DATASET_URL} target="_blank" rel="noreferrer">
                 Explore on Hugging Face <span aria-hidden="true">↗</span>
               </a>
               <Link className="button button-secondary" href="/description/">
@@ -240,7 +240,7 @@ export default function Home() {
         <div className="container download-inner">
           <div><p className="eyebrow">Open access</p><h2>Start exploring KuaiLive-M3</h2><p>Dataset files are hosted on Hugging Face. Field-level documentation is available on this site.</p></div>
           <div className="download-actions">
-            <a className="button button-light" href="https://huggingface.co/imgkkk2004/KuaiLive-M3/tree/main" target="_blank" rel="noreferrer">Open dataset ↗</a>
+            <a className="button button-light" href={DATASET_URL} target="_blank" rel="noreferrer">Open dataset ↗</a>
             <a className="button button-outline-light" href={BENCHMARK_GITHUB_URL} target="_blank" rel="noreferrer">Benchmark code ↗</a>
           </div>
         </div>

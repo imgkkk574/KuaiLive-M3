@@ -50,4 +50,4 @@ The configuration automatically adds the repository name as the base path for pr
 
 ## Dataset
 
-[KuaiLive-M3 on Hugging Face](https://huggingface.co/imgkkk2004/KuaiLive-M3/tree/main)
+[KuaiLive-M3 on Hugging Face](https://huggingface.co/datasets/imgkkk2004/KuaiLive-M3)
