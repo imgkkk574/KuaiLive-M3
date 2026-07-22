@@ -1,0 +1,6 @@
+data/
+outputs/
+.mock_run/
+.tmp/
+__pycache__/
+saqrec/__pycache__/

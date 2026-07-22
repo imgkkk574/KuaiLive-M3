@@ -1,0 +1,53 @@
+# KLM3 raw data and preprocessed outputs
+RecBole-CDR/dataset/
+*.parquet
+*.csv
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+dist/
+build/
+
+# RecBole logs and checkpoints
+RecBole-CDR/log/
+RecBole-CDR/saved/
+log_tune/
+*.pth
+
+# Task-specific generated data, checkpoints, and logs
+highlight/highlight_data/
+highlight/highlight_ckpt/
+SAQRec/data/
+SAQRec/.mock_run/
+SAQRec/outputs/
+SAQRec/log_tune/
+
+# macOS
+.DS_Store
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Local run notes
+highlight_sanity_run.md
+log_tune/
+
+# Agent-generated documentation
+docs/agent/
+AGENTS.md
+
+# myflicker / CLI local config
+.codeflicker/
+
+# Website dependencies and generated static output
+website/node_modules/
+website/.next/
+website/.vinext/
+website/out/
+website/.wrangler/
+website/.env*
+website/next-env.d.ts

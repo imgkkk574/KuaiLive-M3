@@ -1,0 +1,9 @@
+embedding_size: 64
+num_layers: 3
+alpha: 0.5
+c_lambda: 0.05
+c_temp: 0.15
+US_ratio: 0.0
+UV_ratio: 0.0
+SV_ratio: 0.1
+reg_weight: 1e-6

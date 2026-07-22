@@ -1,0 +1,66 @@
+field_separator: "\t"
+
+# Speed optimizations for large-scale training
+save_dataset: False     # save() fails with ChainMap fields; 80s load is acceptable
+train_batch_size: 4096  # better V100 utilization (~2x throughput vs 2048)
+eval_batch_size: 8192
+eval_step: 1            
+stopping_step: 10       
+
+# Source domain: short video (photo)
+# All records are pre-filtered to valid_play in KLM3, so all = positive (implicit feedback)
+source_domain:
+  dataset: klm3_photo
+  data_path: dataset/
+  USER_ID_FIELD: user_id
+  ITEM_ID_FIELD: photo_id
+  RATING_FIELD: ~
+  TIME_FIELD: timestamp
+  NEG_PREFIX: neg_
+  LABEL_FIELD: label
+  load_col:
+    inter: [user_id, photo_id, timestamp]
+  val_interval: ~
+  drop_filter_field: True
+  user_inter_num_interval: ~
+  item_inter_num_interval: ~
+
+# Target domain: live streaming (goal of CDR)
+# timestamp used for train/valid/test temporal split
+target_domain:
+  dataset: klm3_live
+  data_path: dataset/
+  USER_ID_FIELD: user_id
+  ITEM_ID_FIELD: author_id
+  RATING_FIELD: ~
+  TIME_FIELD: timestamp
+  NEG_PREFIX: neg_
+  LABEL_FIELD: label
+  load_col:
+    inter: [user_id, author_id, timestamp]
+  val_interval: ~
+  drop_filter_field: True
+  user_inter_num_interval: ~
+  item_inter_num_interval: ~
+
+# User IDs are identical across domains (same user_id space in KLM3)
+# Explicit link file is required because RecBole-CDR compares remapped integer
+# IDs (not raw token strings) when auto-detecting overlap, which gives 0 overlap.
+user_link_file_path: dataset/klm3_user.link
+item_link_file_path: ~
+
+# MGCCDR: streamer-video ownership graph (author_id x photo_id), separate from the
+# user/item overlap link above. Loaded directly by the model via token->id mapping.
+sv_link_file_path: dataset/klm3_sv.link
+
+# Evaluation metrics at multiple cutoffs
+topk: [10, 20, 40]
+valid_metric: NDCG@10
+
+# Temporal split on target domain using timestamp field
+eval_args:
+  split: {'RS': [0.8, 0.1, 0.1]}
+  split_valid: {'RS': [0.8, 0.2]}
+  order: TO
+  group_by: user
+  mode: full

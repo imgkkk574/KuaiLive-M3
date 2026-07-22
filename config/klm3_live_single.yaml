@@ -1,0 +1,39 @@
+# Single-domain baselines (BPR/NeuMF/NGCF/LightGCN/SASRec) on the KLM3 live domain.
+# Mirrors config/klm3.yaml's target-domain settings so results are comparable to CDR.
+# Run: bash run_single.sh <MODEL> <GPU_ID>
+
+# Single-domain RecBole reads these as flat top-level fields (no source_/target_ prefix).
+field_separator: "\t"
+data_path: ../RecBole-CDR/dataset/   # reuse the .inter files produced by preprocess_klm3.py
+dataset: klm3_live
+USER_ID_FIELD: user_id
+ITEM_ID_FIELD: author_id
+TIME_FIELD: timestamp
+NEG_PREFIX: neg_
+LABEL_FIELD: label
+load_col:
+  inter: [user_id, author_id, timestamp]
+drop_filter_field: True
+user_inter_num_interval: ~
+item_inter_num_interval: ~
+
+# Speed / scale settings (match CDR klm3.yaml)
+save_dataset: False
+train_batch_size: 4096
+eval_batch_size: 8192
+eval_step: 1
+stopping_step: 10
+show_progress: False
+
+# Evaluation — same metrics/cutoffs as CDR so baselines are comparable
+topk: [10, 20, 40]
+valid_metric: NDCG@10
+valid_metric_bigger: True
+
+# Temporal split on the live domain (same as CDR target)
+eval_args:
+  split: {'RS': [0.8, 0.1, 0.1]}
+  split_valid: {'RS': [0.8, 0.2]}
+  order: TO
+  group_by: user
+  mode: full

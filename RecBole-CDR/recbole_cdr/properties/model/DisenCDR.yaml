@@ -1,0 +1,14 @@
+# DisenCDR default hyperparameters
+# Reference: Cao et al., "DisenCDR: Learning Disentangled Representations for
+# Cross-Domain Recommendation", SIGIR 2022.
+#
+# Ported to native RecBole-CDR. input_type = PAIRWISE (BPR), to align with the
+# other KLM3 CDR baselines (MGCCDR/BiTGCF) on implicit feedback.
+
+embedding_size: 64          # feature_dim == hidden_dim (paper default: 128/128)
+n_layers: 2                 # GNN depth (upstream --GNN). run_tune.sh searches {1,2,3}
+dropout: 0.3               # GNN layer dropout rate
+beta: 0.9                  # weight of the disentanglement-alignment KLD terms
+leakey: 0.1                # LeakyReLU negative slope
+reg_weight: 1e-4           # L2 reg weight on the batch's used embeddings
+warmup_epochs: 10          # epochs of specific-only training (KLD disabled) before disentangle
