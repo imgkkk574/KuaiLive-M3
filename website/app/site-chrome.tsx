@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { BENCHMARK_GITHUB_URL, DATASET_URL } from "./site-config";
+import { ThemeToggle } from "./theme-toggle";
 
 export function SiteHeader() {
   return (
@@ -16,7 +17,10 @@ export function SiteHeader() {
           <Link href="/#benchmark">Benchmark</Link>
           <Link href="/description/">Descriptions</Link>
         </nav>
-        <a className="nav-download" href={DATASET_URL} target="_blank" rel="noreferrer">Dataset <span>↗</span></a>
+        <div className="nav-actions">
+          <ThemeToggle />
+          <a className="nav-download" href={DATASET_URL} target="_blank" rel="noreferrer">Dataset <span>↗</span></a>
+        </div>
       </div>
     </header>
   );

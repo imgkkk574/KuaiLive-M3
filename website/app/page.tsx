@@ -63,8 +63,6 @@ export default function Home() {
 
       <section className="hero" id="overview">
         <div className="hero-grid" aria-hidden="true" />
-        <div className="hero-orb hero-orb-one" aria-hidden="true" />
-        <div className="hero-orb hero-orb-two" aria-hidden="true" />
         <div className="container hero-inner">
           <div className="hero-copy">
             <div className="status-pill"><span /> Open dataset · Kuaishou</div>
@@ -89,20 +87,15 @@ export default function Home() {
           </div>
 
           <div className="hero-signal" aria-label="The three dimensions of KuaiLive-M3">
-            <div className="signal-header"><span>Dataset signal map</span><span className="signal-live">LIVE</span></div>
+            <div className="signal-header"><span>Dataset profile</span><span className="signal-live">PUBLIC RELEASE</span></div>
             <div className="signal-center">
-              <div className="signal-ring ring-three" />
-              <div className="signal-ring ring-two" />
-              <div className="signal-ring ring-one" />
-              <div className="signal-core">M3</div>
-              <div className="signal-node node-modal"><b>88M</b><span>segments</span></div>
-              <div className="signal-node node-domain"><b>2</b><span>domains</span></div>
-              <div className="signal-node node-feedback"><b>25K</b><span>surveys</span></div>
+              <div className="signal-core"><span>KuaiLive</span><b>M3</b><small>Recommendation research dataset</small></div>
+              <div className="signal-node node-modal"><i /><span><small>Multi-modal</small><b>88M</b><em>timestamped segments</em></span></div>
+              <div className="signal-node node-domain"><i /><span><small>Multi-domain</small><b>2</b><em>connected ecosystems</em></span></div>
+              <div className="signal-node node-feedback"><i /><span><small>Multi-feedback</small><b>25K</b><em>questionnaire responses</em></span></div>
             </div>
             <div className="signal-legend">
-              <span><i className="dot cyan" /> Multi-modal</span>
-              <span><i className="dot violet" /> Multi-domain</span>
-              <span><i className="dot coral" /> Multi-feedback</span>
+              <span>21,938 users</span><span>146M interactions</span><span>18 data collections</span>
             </div>
           </div>
         </div>

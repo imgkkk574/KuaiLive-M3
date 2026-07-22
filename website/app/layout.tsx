@@ -6,6 +6,14 @@ const githubBase = githubRepository?.endsWith(".github.io")
   ? `https://${githubOwner}.github.io/`
   : `https://${githubOwner}.github.io/${githubRepository}/`;
 
+const themeScript = `(() => {
+  try {
+    const stored = localStorage.getItem("klm3-theme");
+    const dark = stored ? stored === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+    document.documentElement.dataset.theme = dark ? "dark" : "light";
+  } catch (_) {}
+})();`;
+
 export const metadata: Metadata = {
   metadataBase: new URL(githubBase),
   title: "KuaiLive-M3 | Live Streaming Recommendation Dataset",
@@ -26,5 +34,10 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="en"><body>{children}</body></html>;
+  return (
+    <html lang="en" suppressHydrationWarning>
+      <head><script dangerouslySetInnerHTML={{ __html: themeScript }} /></head>
+      <body>{children}</body>
+    </html>
+  );
 }

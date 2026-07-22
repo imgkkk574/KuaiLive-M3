@@ -30,6 +30,8 @@ test("server-renders the KuaiLive-M3 homepage", async () => {
   assert.match(html, /Benchmark code/);
   assert.match(html, /github\.com\/imgkkk574\/KuaiLive-M3/);
   assert.match(html, /huggingface\.co\/datasets\/imgkkk2004\/KuaiLive-M3/);
+  assert.match(html, /Dataset profile/);
+  assert.match(html, /Switch to dark mode/);
   assert.doesNotMatch(html, /huggingface\.co\/imgkkk2004\/KuaiLive-M3/);
   assert.doesNotMatch(html, /codex-preview|react-loading-skeleton|Your site is taking shape/);
 });
@@ -46,12 +48,15 @@ test("server-renders the field description page", async () => {
 });
 
 test("ships project metadata and social preview", async () => {
-  const [layout, packageJson] = await Promise.all([
+  const [layout, packageJson, stylesheet] = await Promise.all([
     readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
     readFile(new URL("../package.json", import.meta.url), "utf8"),
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
   ]);
   assert.match(layout, /KuaiLive-M3/);
   assert.match(layout, /og\.png/);
   assert.doesNotMatch(packageJson, /react-loading-skeleton/);
+  assert.match(packageJson, /lucide-react/);
+  assert.match(stylesheet, /data-theme="dark"/);
   await access(new URL("../public/og.png", import.meta.url));
 });
