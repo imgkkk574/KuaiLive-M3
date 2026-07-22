@@ -69,6 +69,7 @@ Install the dependencies appropriate for the task. The vendored RecBole and
 RecBole-CDR projects retain their upstream licenses and documentation.
 
 ```bash
+pip install -e ./RecBole
 pip install -r RecBole-CDR/requirements.txt
 pip install -r SAQRec/requirements.txt
 pip install pandas pyarrow scipy scikit-learn
@@ -152,30 +153,6 @@ Use comma-separated GPU IDs such as `0,1,2,3` for SAQRec distributed training.
 `BATCH_SIZE` is per GPU; begin with a smaller per-GPU value when using multiple
 devices. Each run writes a persistent log, `best.pt`, best-validation metrics,
 and final test metrics under `SAQRec/outputs/`.
-
-### Project website
-
-The website is maintained in the same repository and is deployed as a static
-GitHub Pages site. For local development:
-
-```bash
-cd website
-npm ci
-npm run dev
-```
-
-Before publishing the new repository, replace the placeholder benchmark URL in
-`website/app/site-config.ts`. To verify the production site locally:
-
-```bash
-cd website
-npm test
-npm run build:github
-```
-
-After pushing to `main`, enable **GitHub Actions** as the Pages source in the
-repository settings. The workflow in `.github/workflows/deploy-pages.yml`
-builds and publishes `website/out/` whenever the website changes.
 
 ## Repository Layout
 
