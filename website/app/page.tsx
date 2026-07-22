@@ -82,6 +82,9 @@ export default function Home() {
               <Link className="button button-secondary" href="/description/">
                 Browse field descriptions <span aria-hidden="true">→</span>
               </Link>
+              <a className="button button-secondary" href={BENCHMARK_GITHUB_URL} target="_blank" rel="noreferrer">
+                Benchmark code <span aria-hidden="true">↗</span>
+              </a>
             </div>
           </div>
 

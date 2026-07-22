@@ -27,6 +27,8 @@ test("server-renders the KuaiLive-M3 homepage", async () => {
   assert.match(html, /Live-stream highlight prediction/);
   assert.match(html, /Questionnaire-based recommendation/);
   assert.match(html, /Recall and NDCG @ 10, 20, 40/);
+  assert.match(html, /Benchmark code/);
+  assert.match(html, /github\.com\/imgkkk574\/KuaiLive-M3/);
   assert.match(html, /huggingface\.co\/datasets\/imgkkk2004\/KuaiLive-M3/);
   assert.doesNotMatch(html, /huggingface\.co\/imgkkk2004\/KuaiLive-M3/);
   assert.doesNotMatch(html, /codex-preview|react-loading-skeleton|Your site is taking shape/);
