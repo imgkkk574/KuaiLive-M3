@@ -9,6 +9,7 @@ val + test metrics highlighted.
 Each results_*.json has the shape (written by train_highlight.py):
     {
       "model": "causal",
+      "prediction_horizon": 1,
       "best_epoch": 37,
       "val":  {mAP, F1@50%, Kendall_tau_d0.0, ...},
       "test": {mAP, F1@50%, Kendall_tau_d0.0, ...},
@@ -66,7 +67,9 @@ def load_runs(ckpt_dir: str) -> List[Dict]:
             "model":     d.get("model"),
             "lr":        a.get("lr"),
             "wd":        a.get("weight_decay"),
+            "input_mode": a.get("input_mode", "embedding"),
             "use_stats": bool(a.get("use_stats", False)),
+            "prediction_horizon": d.get("prediction_horizon"),
             "epoch":     d.get("best_epoch"),
             "val":       d.get("val", {}),
             "test":      d.get("test", {}),
@@ -81,9 +84,16 @@ def _g(d: Dict, k: str) -> float:
     return float(v) if v is not None else float("nan")
 
 
-def _es_tag(r: Dict) -> str:
-    """Tag a run's input variant: '' for embedding-only, '(es)' for emb+stats."""
-    return " (es)" if r.get("use_stats") else ""
+def _variant_tag(r: Dict) -> str:
+    """Return the explicit input variant and prediction horizon."""
+    if r.get("use_stats"):
+        variant = "es"
+    elif r.get("input_mode") == "stats":
+        variant = "stats"
+    else:
+        variant = "plain"
+    horizon = r.get("prediction_horizon")
+    return f" ({variant}, next-{horizon})" if horizon is not None else f" ({variant})"
 
 
 def fmt_row(rank, r, best_tag="") -> str:
@@ -92,7 +102,7 @@ def fmt_row(rank, r, best_tag="") -> str:
             f"{_g(v,'mAP'):<8.4f}  {_g(t,'mAP'):<8.4f}  "
             f"{_g(t,'F1@50%'):<8.4f}{_g(t,'Kendall_tau_d0.0'):<9.4f}"
             f"{_g(t,'Kendall_tau_d0.2'):<9.4f}{_g(t,'Kendall_tau_d0.4'):<9.4f}"
-            f"{_g(t,'Spearman_rho'):<8.4f}{_es_tag(r)}{best_tag}")
+            f"{_g(t,'Spearman_rho'):<8.4f}{_variant_tag(r)}{best_tag}")
 
 
 def print_summary(runs: List[Dict], best_only: bool) -> None:
@@ -123,7 +133,7 @@ def print_summary(runs: List[Dict], best_only: bool) -> None:
 
         best = rs[0]
         print(f"\n  ★ BEST (val mAP): lr={best['lr']}  wd={best['wd']}  "
-              f"(best_epoch={best['epoch']}){_es_tag(best)}")
+              f"(best_epoch={best['epoch']}){_variant_tag(best)}")
         print(f"     val : " + "  ".join(f"{c}={_g(best['val'],c):.4f}" for c in METRIC_COLS))
         print(f"     test: " + "  ".join(f"{c}={_g(best['test'],c):.4f}" for c in METRIC_COLS))
         # val→test gap, useful for overfitting diagnosis
@@ -148,7 +158,7 @@ def print_summary(runs: List[Dict], best_only: bool) -> None:
         print(f"  {r['model']:<14}{str(r['lr']):<9}{str(r['wd']):<9}"
               f"{_g(v,'mAP'):<8.4f}  {_g(t,'mAP'):<8.4f}  "
               f"{_g(t,'F1@50%'):<8.4f}{_g(t,'Kendall_tau_d0.0'):<9.4f}{_g(t,'Spearman_rho'):<8.4f}"
-              f"{_es_tag(r)}")
+              f"{_variant_tag(r)}")
     print()
 
 
@@ -160,14 +170,21 @@ def write_csv(runs: List[Dict], csv_path: str) -> None:
 
     with open(csv_path, "w", newline="") as f:
         w = csv.writer(f)
-        header = ["model", "lr", "weight_decay", "use_stats", "best_epoch"]
+        header = [
+            "model", "lr", "weight_decay", "input_mode", "use_stats",
+            "prediction_horizon", "best_epoch",
+        ]
         header += [f"val_{c}" for c in METRIC_COLS]
         header += [f"test_{c}" for c in METRIC_COLS]
         w.writerow(header)
         for m in MODEL_ORDER + sorted(set(by_model) - set(MODEL_ORDER)):
             for r in sorted(by_model.get(m, []), key=lambda r: _g(r["val"], "mAP"),
                             reverse=True):
-                row = [m, r["lr"], r["wd"], int(r.get("use_stats", False)), r["epoch"]]
+                row = [
+                    m, r["lr"], r["wd"], r.get("input_mode"),
+                    int(r.get("use_stats", False)),
+                    r.get("prediction_horizon"), r["epoch"],
+                ]
                 row += [_g(r["val"], c) for c in METRIC_COLS]
                 row += [_g(r["test"], c) for c in METRIC_COLS]
                 w.writerow(row)

@@ -5,11 +5,14 @@ dataset_highlight.py — PyTorch Dataset for Highlight Prediction
 Loads the preprocessed highlight_data/segments_labeled.parquet and exposes
 per-room sequences for training causal / hierarchical highlight models.
 
-Each sample corresponds to one live room:
-    embeddings  : float32 tensor  [K, 128]   (segment embeddings)
-    hl_scores   : float32 tensor  [K]        (combined highlight score, 0–1)
-    hl_binary   : int8   tensor   [K]        (1 = highlight, 0 = non-highlight)
-    lengths     : int              K          (actual sequence length before padding)
+Each sample corresponds to one live room with one-step-ahead alignment:
+    embeddings  : float32 tensor  [K-1, 128] (segments 0 ... K-2)
+    hl_scores   : float32 tensor  [K-1]      (scores of segments 1 ... K-1)
+    hl_binary   : int8   tensor   [K-1]      (labels of segments 1 ... K-1)
+    lengths     : int              K-1        (number of predictions)
+
+Output position t consumes segment t and is supervised by segment t+1.
+Rooms with fewer than two segments are discarded.
 
 When batching variable-length sequences, use the provided `collate_fn` which
 right-pads all tensors to the longest sequence in the batch and returns a
@@ -44,9 +47,14 @@ class HighlightDataset(Dataset):
     split : str
         'train', 'val', or 'test'
     max_seq_len : int
-        Truncate sequences longer than this (rare very-long streams).
+        Truncate prediction sequences longer than this (rare very-long streams).
         0 = no truncation.
     """
+
+    # These describe the observed/current segment and must not be taken from
+    # target segment t+1. All other stat_* columns are causal aggregates whose
+    # row t+1 value contains behavior observed through segment t.
+    _POSITIONAL_STAT_COLS = frozenset({"stat_rel_pos", "stat_seg_dur_log"})
 
     def __init__(
         self,
@@ -104,31 +112,52 @@ class HighlightDataset(Dataset):
 
         for room_id, grp in df.groupby("live_stream_id", sort=False):
             grp = grp.reset_index(drop=True)
-            K   = len(grp)
+            if len(grp) < 2:
+                continue
+
+            # N+1 raw segments yield N one-step-ahead predictions.
             if max_seq_len > 0:
-                K = min(K, max_seq_len)
-                grp = grp.iloc[:K]
+                grp = grp.iloc[:max_seq_len + 1]
+
+            raw_stats = None
+            if input_mode == "stats" or use_stats:
+                raw_stats = grp[self._stat_cols].to_numpy(dtype=np.float32)
+                aligned_stats = self._align_stats_for_next_segment(raw_stats)
 
             if input_mode == "embedding":
                 # feature_128: may be list-of-lists or list-of-ndarrays
-                feats = np.vstack(grp["feature_128"].values).astype(np.float32)   # [K, 128]
+                all_feats = np.vstack(grp["feature_128"].values).astype(np.float32)
+                feats = all_feats[:-1]
             else:
-                # stats mode: stack the per-segment stat columns
-                feats = grp[self._stat_cols].to_numpy(dtype=np.float32)          # [K, D]
-            hl_score  = grp["hl_score"].values.astype(np.float32)            # [K]
-            hl_binary = grp["hl_binary"].values.astype(np.int64)             # [K]
+                # Stats observed through segment t predict target segment t+1.
+                feats = aligned_stats
+
+            # Segment t is the input; segment t+1 is the prediction target.
+            hl_score  = grp["hl_score"].to_numpy(dtype=np.float32)[1:]
+            hl_binary = grp["hl_binary"].to_numpy(dtype=np.int64)[1:]
 
             self._room_ids.append(int(room_id))
             self._embeddings.append(feats)
             self._hl_scores.append(hl_score)
             self._hl_binary.append(hl_binary)
             if use_stats:
-                # Per-segment stat vector consumed by the model's stat branch.
-                self._stats.append(
-                    grp[self._stat_cols].to_numpy(dtype=np.float32)           # [K, stat_dim]
-                )
+                self._stats.append(aligned_stats)
 
         self._n_rooms = len(self._room_ids)
+
+    def _align_stats_for_next_segment(self, raw_stats: np.ndarray) -> np.ndarray:
+        """Return stats available after t, aligned with target segment t+1.
+
+        The preprocessed behavior aggregates in row k use segments 0..k-1.
+        Therefore row t+1 contains exactly the behavior history available after
+        observing segment t. Positional features remain from row t so no target
+        segment duration or position is exposed.
+        """
+        aligned = raw_stats[:-1].copy()
+        for col_idx, col in enumerate(self._stat_cols):
+            if col not in self._POSITIONAL_STAT_COLS:
+                aligned[:, col_idx] = raw_stats[1:, col_idx]
+        return aligned
 
     # ------------------------------------------------------------------
     # Dataset protocol
@@ -138,18 +167,18 @@ class HighlightDataset(Dataset):
         return self._n_rooms
 
     def __getitem__(self, idx: int) -> Dict[str, torch.Tensor | int]:
-        emb    = torch.from_numpy(self._embeddings[idx])  # [K, emb_dim]
-        scores = torch.from_numpy(self._hl_scores[idx])   # [K]
-        binary = torch.from_numpy(self._hl_binary[idx])   # [K]
+        emb    = torch.from_numpy(self._embeddings[idx])  # [L, emb_dim], segment t
+        scores = torch.from_numpy(self._hl_scores[idx])   # [L], target segment t+1
+        binary = torch.from_numpy(self._hl_binary[idx])   # [L], target segment t+1
         out = {
-            "embeddings": emb,     # [K, emb_dim]
-            "hl_scores":  scores,  # [K]
-            "hl_binary":  binary,  # [K]
+            "embeddings": emb,     # [L, emb_dim]
+            "hl_scores":  scores,  # [L]
+            "hl_binary":  binary,  # [L]
             "length":     emb.shape[0],
             "room_id":    self._room_ids[idx],
         }
         if self.use_stats:
-            out["stats"] = torch.from_numpy(self._stats[idx])   # [K, stat_dim]
+            out["stats"] = torch.from_numpy(self._stats[idx])   # [L, stat_dim]
         return out
 
     # ------------------------------------------------------------------
@@ -252,7 +281,7 @@ def build_dataloaders(
     ----------
     data_dir    : output directory of preprocess_highlight.py
     batch_size  : rooms per batch
-    max_seq_len : truncate long sequences (0 = no limit)
+    max_seq_len : maximum number of next-segment predictions (0 = no limit)
     num_workers : DataLoader workers
     seed        : random seed for train shuffle
     input_mode  : 'embedding' (segment embeddings) or 'stats' (causal stats)

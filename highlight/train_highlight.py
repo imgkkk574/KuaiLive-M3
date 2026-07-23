@@ -2,8 +2,9 @@
 train_highlight.py — Training & Evaluation for Highlight Prediction
 ====================================================================
 
-Trains CausalHighlightTransformer (or any registered model) on the
-highlight_data/ produced by preprocess_highlight.py.
+Trains one-step-ahead highlight predictors on highlight_data/ produced by
+preprocess_highlight.py. At position t, a model consumes segment t (and the
+history allowed by its architecture) and predicts segment t+1.
 
 Evaluation metrics (primary: AntPivot IJCAI-2022 convention;
                    secondary: KuaiHL ICME-2024 convention):
@@ -19,7 +20,7 @@ Usage
   # Causal Transformer (default)
   python train_highlight.py --data_dir highlight_data --model causal
 
-  # Hierarchical (offline / oracle)
+  # Hierarchical causal adaptation
   python train_highlight.py --data_dir highlight_data --model hierarchical
 
   # Quick sanity check with MLP
@@ -195,6 +196,7 @@ def train(args: argparse.Namespace) -> None:
     print(f"  device     : {device}")
     print(f"  epochs     : {args.epochs}")
     print(f"  batch_size : {args.batch_size}")
+    print("  objective  : segment t -> highlight score of segment t+1")
     print()
 
     # ── Guard: --use_stats only makes sense on top of the embedding input ──
@@ -355,6 +357,7 @@ def train(args: argparse.Namespace) -> None:
     # Save final results
     results = {
         "model":       args.model,
+        "prediction_horizon": 1,
         "best_epoch":  ckpt["epoch"],
         "val":         val_m,
         "test":        test_m,
@@ -380,13 +383,15 @@ def _print_metrics(m: Dict[str, float]) -> None:
 # ──────────────────────────────────────────────────────────────────────────────
 
 def parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="Train highlight prediction model on KLM3")
+    p = argparse.ArgumentParser(
+        description="Train one-step-ahead highlight prediction model on KLM3"
+    )
 
     # Data
     p.add_argument("--data_dir",    required=True,
                    help="Output directory of preprocess_highlight.py")
     p.add_argument("--max_seq_len", type=int, default=200,
-                   help="Truncate room sequences longer than this (0 = no limit)")
+                   help="Maximum next-segment predictions per room (0 = no limit)")
     p.add_argument("--num_workers", type=int, default=4)
     p.add_argument("--input_mode", default="embedding",
                    choices=["embedding", "stats"],

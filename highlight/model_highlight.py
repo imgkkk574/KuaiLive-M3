@@ -4,13 +4,13 @@ model_highlight.py — Highlight Prediction Models
 
 Two model families, matching highlight_task.md design:
 
-1. CausalHighlightTransformer  (KuaiHL-style, "Online" mode)
+1. CausalHighlightTransformer  (KuaiHL-style)
    Causal multi-head self-attention — each segment can only attend to past
-   segments.  No future leakage.  Suitable for real-time highlight display.
+   segments. Position t predicts the highlight score of segment t+1.
 
-2. HierarchicalHighlightTransformer  (AntPivot-style, "Offline" mode, †)
-   Local window attention followed by global attention over the full sequence.
-   Uses all segments — oracle upper bound.  Mark results as † in paper.
+2. HierarchicalHighlightTransformer  (AntPivot-style causal adaptation)
+   Causal local-window attention followed by causal global attention. This
+   preserves the hierarchical structure without exposing the target segment.
 
 3. Baseline models (GRU, MLP)
    Used as comparison baselines.
@@ -165,7 +165,9 @@ class CausalHighlightTransformer(nn.Module):
         """
         B, T, _ = embeddings.shape
         x = self.pe(self.proj(embeddings))   # [B, T, d_model]
-        if self.stat_branch is not None and stats is not None:
+        if self.stat_branch is not None:
+            if stats is None:
+                raise ValueError("use_stats=True model requires a stats tensor")
             x = x + self.stat_branch(stats)  # [B, T, d_model]
 
         # Causal (autoregressive) mask: position i cannot see position j > i
@@ -188,21 +190,22 @@ class CausalHighlightTransformer(nn.Module):
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# 2. Hierarchical Transformer  (AntPivot-style, Offline †)
+# 2. Hierarchical Transformer  (AntPivot-style causal adaptation)
 # ──────────────────────────────────────────────────────────────────────────────
 
 class HierarchicalHighlightTransformer(nn.Module):
     """
-    Hierarchical attention over the full segment sequence (offline / oracle mode).
+    Hierarchical causal attention for one-step-ahead segment prediction.
 
     Architecture
     ------------
     Segment emb (128) → Linear proj → Learned PE
-    → Local attention (window W, 1 layer)    [attend within W-segment window]
-    → Global attention (N_global layers)     [attend across all segments]
+    → Local causal attention (window W, 1 layer)
+    → Global causal attention (N_global layers)
     → Score head → sigmoid → [B, T]
 
-    This model sees all segments and is NOT causal — mark results with † in paper.
+    At position t, both stages can access only positions <= t. The output at t
+    predicts segment t+1 without seeing its embedding.
 
     Parameters
     ----------
@@ -210,7 +213,7 @@ class HierarchicalHighlightTransformer(nn.Module):
     d_model    : hidden size
     n_heads    : attention heads
     n_global   : number of global attention layers
-    window     : local attention window size (each segment attends to ±window//2)
+    window     : local causal window (current plus window-1 past segments)
     d_ff       : feed-forward size (default 4 * d_model)
     dropout    : dropout rate
     max_seq_len: max positional encoding length
@@ -244,7 +247,7 @@ class HierarchicalHighlightTransformer(nn.Module):
         self.local_attn = nn.TransformerEncoder(local_layer, num_layers=1,
                                                  enable_nested_tensor=False)
 
-        # Global layers: standard bidirectional attention
+        # Global layers receive a causal mask in forward().
         global_layer = nn.TransformerEncoderLayer(
             d_model=d_model, nhead=n_heads, dim_feedforward=d_ff,
             dropout=dropout, batch_first=True,
@@ -260,15 +263,13 @@ class HierarchicalHighlightTransformer(nn.Module):
     @staticmethod
     def _local_mask(T: int, window: int, device: torch.device) -> torch.Tensor:
         """
-        Construct an additive attention mask where position i is allowed to
-        attend to positions j only if |i - j| <= window // 2.
-        Masked positions get -inf, unmasked get 0.
+        Position i may attend only to itself and the preceding window-1
+        positions. True entries are blocked.
         """
-        half = window // 2
-        idx  = torch.arange(T, device=device)
-        dist = (idx.unsqueeze(0) - idx.unsqueeze(1)).abs()   # [T, T]
-        mask = (dist > half)                                   # True = blocked
-        return mask   # bool mask — True means "ignore this position"
+        idx = torch.arange(T, device=device)
+        lag = idx.unsqueeze(1) - idx.unsqueeze(0)
+        allowed = (lag >= 0) & (lag < window)
+        return ~allowed
 
     def forward(
         self,
@@ -283,15 +284,26 @@ class HierarchicalHighlightTransformer(nn.Module):
         """
         B, T, _ = embeddings.shape
         x = self.pe(self.proj(embeddings))   # [B, T, d_model]
-        if self.stat_branch is not None and stats is not None:
+        if self.stat_branch is not None:
+            if stats is None:
+                raise ValueError("use_stats=True model requires a stats tensor")
             x = x + self.stat_branch(stats)  # [B, T, d_model]
 
         # Local attention with windowed mask
         local_mask = self._local_mask(T, self.window, embeddings.device)  # [T, T]
         h_local = self.local_attn(x, mask=local_mask, src_key_padding_mask=pad_mask)
 
-        # Global bidirectional attention
-        h_global = self.global_attn(h_local, src_key_padding_mask=pad_mask)
+        # Position t must not see the embedding at t+1, which is the target.
+        causal_mask = torch.triu(
+            torch.ones(T, T, device=embeddings.device, dtype=torch.bool),
+            diagonal=1,
+        )
+        h_global = self.global_attn(
+            h_local,
+            mask=causal_mask,
+            src_key_padding_mask=pad_mask,
+            is_causal=True,
+        )
 
         scores = self.score_head(h_global)         # [B, T]
         scores = scores.masked_fill(pad_mask, 0.0)
@@ -303,7 +315,7 @@ class HierarchicalHighlightTransformer(nn.Module):
 # ──────────────────────────────────────────────────────────────────────────────
 
 class MLPHighlight(nn.Module):
-    """Per-segment MLP: no sequence modelling, each segment scored independently."""
+    """Use segment t alone to predict t+1; no sequence modelling."""
     def __init__(self, seg_dim: int = 128, hidden: int = 256, dropout: float = 0.1,
                  use_stats: bool = False, stat_dim: int = 10) -> None:
         super().__init__()
@@ -326,7 +338,9 @@ class MLPHighlight(nn.Module):
     def forward(self, embeddings: torch.Tensor, pad_mask: torch.Tensor,
                 stats: Optional[torch.Tensor] = None) -> torch.Tensor:
         x = self.proj(embeddings)                # [B, T, hidden]
-        if self.stat_branch is not None and stats is not None:
+        if self.stat_branch is not None:
+            if stats is None:
+                raise ValueError("use_stats=True model requires a stats tensor")
             x = x + self.stat_branch(stats)      # [B, T, hidden]
         scores = self.net(x).squeeze(-1)         # [B, T]
         return scores.masked_fill(pad_mask, 0.0)
@@ -334,7 +348,7 @@ class MLPHighlight(nn.Module):
 
 class GRUHighlight(nn.Module):
     """
-    Causal GRU: processes segments left-to-right, predict score at each step.
+    Causal GRU: processes segments left-to-right and predicts t+1 at step t.
     Same "online" property as CausalHighlightTransformer but with GRU.
     """
     def __init__(
@@ -363,7 +377,9 @@ class GRUHighlight(nn.Module):
     def forward(self, embeddings: torch.Tensor, pad_mask: torch.Tensor,
                 stats: Optional[torch.Tensor] = None) -> torch.Tensor:
         x      = self.proj(embeddings)           # [B, T, hidden]
-        if self.stat_branch is not None and stats is not None:
+        if self.stat_branch is not None:
+            if stats is None:
+                raise ValueError("use_stats=True model requires a stats tensor")
             x = x + self.stat_branch(stats)      # [B, T, hidden]
         h, _   = self.gru(x)                     # [B, T, hidden]
         scores = self.score_head(h)              # [B, T]

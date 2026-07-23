@@ -17,11 +17,11 @@
 #   LR_LIST  (default "1e-3 5e-3 1e-4 5e-4 1e-5")   → 5
 #   WD_LIST  (default "1e-5 1e-3 1e-4")              → 3
 #   EPOCHS   (default 100)
-#   VARIANTS (default "stats es")  → space-separated input variants to run:
+#   VARIANTS (default "plain stats es") → input variants to run:
 #                stats = stats-only (--input_mode stats)
 #                es    = embedding + stat branch (--use_stats)
 #                plain = embedding-only
-#   → 2 groups × 4 models × 5 lr × 3 wd = 120 runs.
+#   → 3 groups × 4 models × 5 lr × 3 wd = 180 runs.
 #
 # Model size (env-overridable, injected as --key=value):
 #   BATCH_SIZE (512)  D_MODEL (128)  N_HEADS (8)  N_LAYERS (4)  WINDOW (7)
@@ -32,7 +32,7 @@
 #   - Tasks are generated group-major then model-major (all group-0 mlp configs
 #     first, …), so the first wave is one group/model until slots free up.
 #   - `wait -n` + `kill -0` sweep reclaims freed slots (bash 4.x compatible).
-#   - Per-run output: highlight_ckpt/<model>_lr<lr>_wd<wd><suffix>/ where
+#   - Per-run output: highlight_ckpt_next1/<model>_lr<lr>_wd<wd><suffix>/ where
 #     <suffix> = _stats (stats-only), _es (emb+stats), or "" (embedding-only).
 #
 # Resume:
@@ -41,7 +41,7 @@
 #
 # Notes:
 #   - This env blocks writes to /dev/null (EPERM), so scheduler stderr goes to
-#     highlight_ckpt/logs/_scheduler.err instead.
+#     highlight_ckpt_next1/logs/_scheduler.err instead.
 #   - --lr / --weight_decay are sweep-controlled; passing them on the CLI is
 #     ignored (edit LR_LIST / WD_LIST).
 
@@ -77,19 +77,19 @@ MODELS=(mlp gru causal hierarchical)
 JOBS_PER_GPU="${JOBS_PER_GPU:-4}"          # concurrent runs per physical GPU
 
 # Input-variant groups to sweep in ONE run. Each group is "name|cli_flag|tag_suffix":
-#   stats    : --input_mode stats                 (10-dim leakage-free stats only)
-#   es       : --use_stats                        (128-dim embedding + additive 10-dim stat branch)
-# Both run for every (model, lr, wd). Tags carry the suffix so the two groups are
-# isolated under highlight_ckpt/ and never overwrite each other.
+#   plain    : --input_mode embedding             (128-dim embedding only)
+#   stats    : --input_mode stats                 (10-dim causal stats only)
+#   es       : --input_mode embedding --use_stats (embedding + additive stats)
+# All run for every (model, lr, wd). Tags carry distinct suffixes where needed.
 #
 # Override the set of groups via the VARIANTS env var, e.g.:
-#   VARIANTS="stats es"        bash run_highlight.sh ...   # default: stats + emb+stats
+#   VARIANTS="plain stats es"  bash run_highlight.sh ...   # default: all three
 #   VARIANTS="es"              bash run_highlight.sh ...   # only emb+stats
-#   VARIANTS="plain stats es"  bash run_highlight.sh ...   # also add embedding-only
+#   VARIANTS="stats es"        bash run_highlight.sh ...   # omit embedding-only
 # Recognised names: plain (embedding only), stats (stats only), es (emb+stats).
 # NOTE: the env var is VARIANTS, not GROUPS — bash reserves GROUPS as a readonly
 # array of the user's GIDs, so ${GROUPS:-...} never falls through.
-VARIANTS="${VARIANTS:-stats es}"
+VARIANTS="${VARIANTS:-plain stats es}"
 IFS=' ' read -ra GROUP_LIST <<< "$VARIANTS" || true
 
 # Resolve each requested group name to (cli flag(s), tag suffix).
@@ -97,9 +97,9 @@ declare -a GROUP_FLAGS GROUP_SUFFIX
 _valid_groups=()
 for _g in "${GROUP_LIST[@]}"; do
     case "$_g" in
-        plain) GROUP_FLAGS+=(--input_mode=embedding);     GROUP_SUFFIX+=("")       ;;
-        stats) GROUP_FLAGS+=(--input_mode=stats);         GROUP_SUFFIX+=("_stats") ;;
-        es)    GROUP_FLAGS+=(--use_stats);                GROUP_SUFFIX+=("_es")    ;;
+        plain) GROUP_FLAGS+=("--input_mode=embedding");             GROUP_SUFFIX+=("")       ;;
+        stats) GROUP_FLAGS+=("--input_mode=stats");                 GROUP_SUFFIX+=("_stats") ;;
+        es)    GROUP_FLAGS+=("--input_mode=embedding --use_stats"); GROUP_SUFFIX+=("_es")    ;;
         *) echo "[error] unknown group '$_g' (valid: plain stats es)" >&2; exit 1 ;;
     esac
     _valid_groups+=("$_g")
@@ -149,7 +149,9 @@ MODEL_SIZE_DEFAULTS=(
 TRAIN_ARGS=("${MODEL_SIZE_DEFAULTS[@]}" ${TRAIN_ARGS[@]+"${TRAIN_ARGS[@]}"})
 
 DATA_DIR="$SCRIPT_DIR/highlight_data"
-CKPT_DIR="$SCRIPT_DIR/highlight_ckpt"
+# Keep one-step-ahead results separate from the legacy same-segment task.
+# Override CKPT_DIR explicitly only when a different destination is intended.
+CKPT_DIR="${CKPT_DIR:-$SCRIPT_DIR/highlight_ckpt_next1}"
 LOG_DIR="$CKPT_DIR/logs"
 ERR_LOG="$LOG_DIR/_scheduler.err"          # stderr sink (/dev/null is blocked)
 mkdir -p "$CKPT_DIR" "$LOG_DIR"

@@ -29,16 +29,17 @@ full-sort retrieval on the target domain with Recall/NDCG at 10, 20, and 40.
 Each example is a chronological sequence of segments from one live room. The
 continuous target is `0.6 × normalized retention + 0.4 × normalized engagement
 density`; the binary highlight label is the top 30% of segments within a room.
-Rooms are split chronologically by start time (70/10/20). The `hierarchical`
-model is offline and may use future segments; the other sequential models are
-online/causal.
+The benchmark uses one-step-ahead prediction: at position `t`, a model observes
+segment `t` and its permitted history to predict the highlight score and label
+of segment `t+1`. Rooms are split chronologically by start time (70/10/20), and
+all sequential models are causal with respect to the target segment.
 
 | Model | Setting | Main metrics |
 | --- | --- | --- |
-| `mlp` | Segment-wise reference | mAP, F1@50%, Kendall's tau, Spearman's rho |
-| `gru` | Online recurrent | mAP, F1@50%, Kendall's tau, Spearman's rho |
-| `causal` | Online causal Transformer | mAP, F1@50%, Kendall's tau, Spearman's rho |
-| `hierarchical` | Offline local-plus-global Transformer | mAP, F1@50%, Kendall's tau, Spearman's rho |
+| `mlp` | Current-segment reference | mAP, F1@50%, Kendall's tau, Spearman's rho |
+| `gru` | Causal recurrent | mAP, F1@50%, Kendall's tau, Spearman's rho |
+| `causal` | Causal Transformer | mAP, F1@50%, Kendall's tau, Spearman's rho |
+| `hierarchical` | Causal local-plus-global Transformer | mAP, F1@50%, Kendall's tau, Spearman's rho |
 
 Three input variants are available for every highlight model: `plain`
 (segment embedding), `stats` (causal interaction statistics only), and `es`
@@ -110,18 +111,20 @@ over all four models. Start with a small run before using the default sweep.
 LR_LIST='1e-3' WD_LIST='1e-4' EPOCHS=5 JOBS_PER_GPU=1 VARIANTS='plain' \
   bash run_highlight.sh /data/klm3 0 --top_k 500
 
-# Default stats-only and embedding+stats sweeps on two GPUs
+# Default sweep over all three input variants on two GPUs
 bash run_highlight.sh /data/klm3 0,1
 
 # All input variants
 VARIANTS='plain stats es' bash run_highlight.sh /data/klm3 0,1
 
 # Summarise completed highlight runs
-python highlight/parse_highlight_results.py highlight/highlight_ckpt --best-only
+python highlight/parse_highlight_results.py highlight/highlight_ckpt_next1 --best-only
 ```
 
 Outputs are isolated in `highlight/highlight_data/` and
-`highlight/highlight_ckpt/`. Completed sweep runs are resumed automatically.
+`highlight/highlight_ckpt_next1/`. The separate checkpoint directory prevents
+one-step-ahead results from being mixed with legacy same-segment runs. Completed
+sweep runs are resumed automatically.
 
 ### Questionnaire-based recommendation
 
